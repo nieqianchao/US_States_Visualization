@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>A5</title>
+</head>
+<style>
+    .bar--positive {
+        fill: #9BCCF5;
+    }
+
+    .bar--negative {
+        fill: pink;
+    }
+
+    .region1 {
+        fill: #E41A1C;
+    }
+    .region2 {
+        fill: #377EB8;
+    }
+    .region3 {
+        fill: #4DAF4A;
+    }
+    .region4 {
+        fill: #984EA3;
+    }
+    .region5 {
+        fill: #FF7F00;
+    }
+
+    text {
+        font: 10px sans-serif;
+        text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+    }
+
+    .axis path,
+    .axis line {
+        fill: none;
+        stroke: #000;
+        shape-rendering: crispEdges;
+    }
+
+    .title {
+        font-size: 13px;
+        font-weight:bold;
+        fill:black;
+    }
+    .active {
+        stroke: black;
+        stroke-width: 1.5px;
+    }
+    .reset {
+        fill:blue;
+        text-decoration: underline;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight:bold;
+    }
+    .states {
+      fill: none;
+      stroke: #888;
+      stroke-linejoin: round;
+    }    
+    text.negative,
+    text.positive,
+    .label,
+    .bar,
+    .node text,
+    circle {
+        cursor: pointer;
+    }
+</style>
+<body>
+
+<div>
+    <span id='bubble-chart'></span>
+    <span id='bar-chart'></span>
+</div>
+<div>
+    <span id='map-chart'></span>
+</div>
+
+<script src='http://crossfilter.github.io/crossfilter/crossfilter.v1.min.js'></script>
+<script src='https://d3js.org/d3.v3.min.js'></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src='./data.js'></script>
+<script>
+    function drawBar (selector, dispatch, dimension, group) {
+        var margin = {top: 20, right: 0, bottom: 20, left: 50},
+                width = 475 - margin.left - margin.right,
+                height = 300 - margin.top - margin.bottom;
+
+        var x = d3.scale.ordinal().rangeRoundBands([0, width], .05);
+        var y = d3.scale.linear().range([height, 0]);
+
+        var xAxis = d3.svg.axis()
+                .scale(x)
+                .orient('bottom');
+
+        var yAxis = d3.svg.axis()
+                .scale(y)
+                .orient('left')
+                .ticks(10);
+
+        var t = d3.transition()
+                .duration(750);
+
+        var svg = d3.select(selector),
+                g = svg.select('g');
+
+        function click(d) {
+            dimension.filter(d ? d.key : null);
+            dispatch.redraw();
+            svg.selectAll('rect').classed('active', false)
+            if(!d) {
+                return reset.style('display', 'none');
+            }
+
+            svg.select('.' + btoa(d.key).replace(/=/g, '')).classed('active', true)
+            reset.style('display', 'block')
+        }
+
+        if (g.empty()) {
+            g = svg.append('svg')
+                    .attr('width', width + margin.left + margin.right)
+                    .attr('height', height + margin.top + margin.bottom)
+                    .append('g')
+                    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+            g.append('g')
+                    .attr('class', 'x axis')
+                    .attr('transform', 'translate(0,' + height + ')')
+                    .call(xAxis);
+
+            g.append('g')
+                    .attr('class', 'y axis')
+                    .call(yAxis)
+                    .append('text')
+                    .attr('y', -20)
+                    .attr('x', 200)
+                    .attr('dy', '.71em')
+                    // .style('text-anchor', 'end')
+                    // .text('number of comments in defferent regions');
+
+            var reset = g.append('text')
+                    .attr('class', 'reset')
+                    .attr('y', -5)
+                    .attr('x', -40)
+                    .style('display', 'none')
+                    .text('Reset')
+                    .on('click', click);
+                                       
+        }
+
+        dispatch.on('redraw.' + selector, function () {
+            x.domain(group.all().map(function(d) { return d.key; }));
+            y.domain([0, d3.max(group.all(), function(d) { return d.value; })]);
+
+            g.select('.y.axis')
+                    .transition(t)
+                    .call(yAxis)
+
+            var xAxisDom = g.select('.x.axis')
+                    .transition(t)
+                    .call(xAxis)
+
+            var rects = g.selectAll('rect')
+                    .data(group.all());
+            // console.log(group.all())
+            rects.enter().append('rect')
+                    .on('click', click)
+                    .attr('class', function (d) { return btoa(d.key).replace(/=/g, '') })
+
+            rects
+                    .classed('bar', true)
+                    .classed('region1', function (d) { return d.key == 1})
+                    .classed('region2', function (d) { return d.key == 2})
+                    .classed('region3', function (d) { return d.key == 3})
+                    .classed('region4', function (d) { return d.key == 4})
+                    .classed('region5', function (d) { return d.key == 5})
+
+                    .transition(t)
+                    // .attr('class', function(d) { return 'bar bar--' + (d.key == 'female' ? 'negative' : 'positive'); })
+                    .attr('x', function(d) { return x(d.key); })
+                    .attr('width', x.rangeBand())
+                    .attr('y', function(d) { return y(d.value); })
+                    .attr('height', function(d) { return height - y(d.value); })
+
+            var texts = g.selectAll('.label')
+                    .data(group.all())
+
+            texts.enter().append('text').attr('class', 'label').on('click', click)
+
+            texts
+                    .transition(t)
+                    .attr('text-anchor', 'middle')
+                    .attr('x', function(d,i) {
+                        return x(d.key) + (x.rangeBand() / 2);
+                    })
+                    .attr('y', function(d,i) {
+                        return y(d.value) + ((height - y(d.value)) / 2);
+                    })
+                    .attr('dy', '.35em')
+                    .text(function (d) { return d.value })
+
+        })
+    }
+
+    function drawBubble (selector, dispatch, dimension, group) {
+        var margin = {top: 0, right: 0, bottom: 0, left: 0},
+                width = 480 - margin.left - margin.right,
+                height = 320 - margin.top - margin.bottom;
+
+        var onClick;
+
+        var color = d3.scale.category20();
+
+        var bubble = d3.layout.pack()
+                .sort(null)
+                .size([width, height])
+                .padding(10);
+
+        var t = d3.transition()
+                .duration(750);
+
+        var svg = d3.select(selector),
+                g = svg.select('g');
+
+        if (!svg.empty()) {
+            svg.select('svg').remove()
+         
+        }
+
+        g = svg.append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .attr('class', 'bubble')
+                .append('g')
+                .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
+
+        var reset = g.append('text')
+                .attr('class', 'reset')
+                .style('display', 'none')
+                .attr('y', 30)
+                .attr('x', 20)
+                .text('Reset')
+                .on('click', click)
+
+
+        function click(d) {
+
+            dimension.filter(d ? d.key : null);
+            dispatch.redraw();
+            //border become despear when choose another circle 
+            svg.selectAll('circle').classed('active', false)
+            if(!d) {
+                return reset.style('display', 'none');
+            }
+
+            // circle border become black 
+            svg.select('.' + btoa(d.key).replace(/=/g, '')).classed('active', true)
+            console.log('.' + btoa(d.key).replace(/=/g, ''))
+            //reset text display as block
+            reset.style('display', 'block')
+        }
+
+        //bubbles needs very specific format, convert data to this.
+        var node = g.selectAll('.node')
+                .data(bubble.nodes({ children: group.all() }).filter(function(d) { return !d.children; }))
+
+        node.enter().append('g')
+                .attr('class', 'node')
+                .attr('transform', function(d) {return 'translate(' + d.x + ',' + d.y + ')'; });
+
+        node.append('title')
+                .text(function(d) { return d.key; });
+
+        node.append('circle')
+                .attr('class', function (d) { return btoa(d.key).replace(/=/g, '')})
+                .attr('r', function(d) { return d.r; })
+                .style('fill', function(d) { return color(d.key); })
+
+        node.append('text')
+                .attr('dy', '.3em')
+                .attr('class', 'label')
+                .style('text-anchor', 'middle')
+
+        dispatch.on('redraw.' + selector, function () {
+            var reset = g.selectAll('.reset')
+
+            node = g.selectAll('.node')
+                    .data(bubble.nodes({ children: group.all() })
+                    .filter(function(d) { return !d.children; }))
+            // console.log(group.all())
+            node.attr('class', 'node')
+                .transition(t)
+                .attr('transform', function(d) {return 'translate(' + d.x + ',' + d.y + ')'; });
+
+            node.select('circle')
+                    .on('click', click)
+                    .transition(t)
+                    .attr('r', function(d) { return d.r; })
+                    .style('fill', function(d) { return color(d.key); })
+
+            node.select('text')
+                    .attr('dy', '.3em')
+                    .style('text-anchor', 'middle')
+                    .text(function(d) { return d.key.substring(0, d.r ); })
+                    .on('click', click)
+
+        })
+    }
+
+    function drawMap (selector, dispatch, dimension, group){
+        var color = d3.scale.category20();
+        var t = d3.transition()
+                .duration(750);
+        var mapdata = d3.map();
+        for (var i = 0; i < data.length; i++){
+            mapdata[data[i].id] = data[i];
+        }
+
+        var svg = d3.select(selector),
+            g = svg.select('g');
+
+        if (!svg.empty()) {
+            svg.select('svg').remove()
+        }   
+        if(g.empty()){
+        g= svg.append('svg')
+               .attr('width',960)
+               .attr('height',350)
+               .attr('class','map')
+               .append('g');
+               
+               // .attr('transform', 'translate(0,400)');
+
+        var reset = g.append('text')
+                .attr('y', 20)
+                .attr('x', 20)
+                .attr('class','reset')
+                .style('display','none')
+                .text('Reset')
+                .on('click',click);
+        
+        var title1 = g.append('text')
+                .attr('y', 10)
+                .attr('x', 200)
+                .attr('class','title')
+                .text('Score For Each State');
+        var title2 = g.append('text')
+                .attr('y', 10)
+                .attr('x', 650)
+                .attr('class','title')
+                .text('Number Of Comments For Region');  
+        var title3 = g.append('text')
+                .attr('y', 65)
+                .attr('x', 380)
+                .attr('class','title')
+                .text('Number Of Comments For State');  
+
+        }
+
+        var projection = d3.geo.albersUsa()
+            .scale(650)
+            .translate([480, 200]);
+        var path = d3.geo.path()
+                    .projection(projection);
+        queue()
+        .defer(d3.json, "us.json")
+        .await(ready);
+        function ready(error, us) {
+            
+            g.append("path")
+            .attr("class", "states")
+            .datum(topojson.feature(us, us.objects.states),function(a, b) { return a !== b; })
+            .attr("d", path);
+            
+        }
+        function click(d) {
+            dimension.filter(d ? d.key : null);
+            dispatch.redraw();
+            svg.selectAll('circle').classed('active', false)
+            if(!d) {
+                return reset.style('display', 'none');
+            }
+            svg.select('.' + btoa(d.key).replace(/=/g, '')).classed('active', true)
+            console.log('.' + btoa(d.key))
+            reset.style('display', 'block')
+        }        
+        var map = g.selectAll('.map')
+                   .data(group.all()) 
+                   // .filter(function(d){return d;})
+        map.enter().append('g').attr('class','map')
+        map.append('circle')
+            .attr('class', function (d) { return btoa(d.key).replace(/=/g, '') })
+            .on('click',click)
+            // .attr('class', function (d) { return btoa(d.key).replace(/=/g, '') })
+            .transition(t)
+            .attr('r',function(d){return Math.pow(d.value,0.3);})
+            .attr('cx',function(d){return projection([mapdata[d.key].lon,mapdata[d.key].lat])[0];})
+            .attr('cy',function(d){return projection([mapdata[d.key].lon,mapdata[d.key].lat])[1];})
+            .attr('fill',function(d){return mapdata[d.key].color;})
+            .style('opacity',0.75);        
+        //console.log(projection([mapdata["Arizona"].lon,mapdata["Arizona"].lat])[0]);
+        dispatch.on('redraw.' + selector, function () {  
+        // console.log(group.all());      
+        var map = g.selectAll('.map')
+                   .data(group.all()) 
+
+            map.select('circle')
+                .on('click',click)
+                // .attr('class', function (d) { return btoa(d.key).replace(/=/g, '') })
+                .transition(t)
+                .attr('r',function(d){return Math.pow(d.value,0.3);})
+                .attr('cx',function(d){return projection([mapdata[d.key].lon,mapdata[d.key].lat])[0];})
+                .attr('cy',function(d){return projection([mapdata[d.key].lon,mapdata[d.key].lat])[1];})
+                .attr('fill',function(d){return mapdata[d.key].color;})
+                .style('opacity',0.75);
+            })
+    }
+
+    var xf = crossfilter(data);
+
+    var region = xf.dimension(function (d) { return d.region; }),
+            region_num_comment = region.group().reduceSum(function (d) { return d.num_comments; }),
+
+            state = xf.dimension(function (d) { return d.id }),
+            score = state.group().reduceSum(function (d) { return d.score; }),
+            state_num_comment = state.group().reduceSum(function (d) { return d.num_comments; });
+
+    var dispatch = d3.dispatch('redraw');
+//    drawTornado('#tornado-chart', dispatch, newTopic, topicGroup);
+//    drawTornado('#tornado-chart2', dispatch, age, ages)
+    drawBar('#bar-chart', dispatch, region, region_num_comment);
+    drawBubble('#bubble-chart', dispatch, state, score);
+    drawMap('#map-chart', dispatch, state, state_num_comment);
+    dispatch.redraw();
+
+    d3.select(self.frameElement).style("height", "738px");
+
+
+
+</script>
+</body>
+</html>
